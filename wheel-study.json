@@ -1,0 +1,15 @@
+{
+  "title": "Spin on what topic to study",
+  "spinDurationMs": 5000,
+  "removeAfterPick": false,
+  "segments": [
+    { "label": "Web Development Syntax", "color": "#457b9d" },
+    { "label": "Hardware Verification", "color": "#e9c46a" },
+    { "label": "5G simulation", "color": "#457b9d" },
+    { "label": "Openlane Procedure", "color": "#e9c46a" },
+    { "label": "Opensource Robotics", "color": "#457b9d" },
+    { "label": "Systems", "color": "#e9c46a" },
+    { "label": "Programming Funda", "color": "#457b9d" },
+    { "label": "Machine Learning", "color": "#e9c46a" }
+  ]
+}

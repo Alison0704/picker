@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Spin the Wheel</title>
+<style>
+  :root {
+    --bg: #0f1020;
+    --panel: #1a1c33;
+    --text: #f5f5fa;
+    --muted: #9a9ab5;
+    --accent: #ffd166;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, #23244a, var(--bg));
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px 48px;
+  }
+  h1 {
+    font-size: clamp(1.5rem, 4vw, 2.4rem);
+    margin: 8px 0 4px;
+    letter-spacing: 0.5px;
+    text-align: center;
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .toolbar label,
+  button.link {
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: var(--panel);
+    border: 1px solid #2c2f52;
+    padding: 8px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .toolbar label:hover,
+  button.link:hover { color: var(--text); border-color: var(--accent); }
+  .toolbar input[type=file] { display: none; }
+
+  .stage {
+    position: relative;
+    width: min(90vw, 520px);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Pointer at top */
+  .pointer {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-top: 30px solid var(--accent);
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    z-index: 5;
+  }
+  canvas#wheel {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset 0 0 0 8px rgba(255,255,255,0.06);
+    transition: transform var(--dur, 5s) cubic-bezier(0.17, 0.67, 0.12, 0.99);
+  }
+  .spin-btn {
+    position: absolute;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #1a1c33;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    z-index: 4;
+    transition: transform 0.1s;
+
+  }
+  .spin-btn:hover:not(:disabled) { transform: scale(1.06); }
+  .spin-btn:active:not(:disabled) { transform: scale(0.96); }
+  .spin-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .result {
+    margin-top: 26px;
+    min-height: 2.2rem;
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    text-align: center;
+  }
+  .result strong { color: var(--accent); }
+  .result.pop { animation: pop 0.4s ease; }
+  @keyframes pop {
+    0% { transform: scale(0.8); opacity: 0; }
+    60% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .error {
+    color: #ff6b6b;
+    max-width: 420px;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+  footer { margin-top: 30px; color: var(--muted); font-size: 0.75rem; text-align: center; }
+  footer code { background: var(--panel); padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h1 id="title">Spin the Wheel</h1>
+  <div class="toolbar">
+    <label for="fileInput">Load JSON</label>
+    <input type="file" id="fileInput" accept="application/json,.json" />
+    <button class="link" id="reloadBtn">Reload wheel</button>
+    <button class="link" id="shuffleBtn">Shuffle</button>
+  </div>
+
+  <div class="stage">
+    <div class="pointer"></div>
+    <canvas id="wheel" width="1000" height="1000"></canvas>
+    <button class="spin-btn" id="spinBtn">SPIN</button>
+  </div>
+
+  <div class="result" id="result">Press <strong>SPIN</strong> to pick a winner</div>
+  <div class="error" id="error"></div>
+
+  <footer>
+    Edit <code>wheel.json</code> to change the options, then <code>Reload</code>.
+    Opening via <code>file://</code>? Use <code>Load JSON</code>.
+  </footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas.getContext('2d');
+  const spinBtn = document.getElementById('spinBtn');
+  const resultEl = document.getElementById('result');
+  const errorEl = document.getElementById('error');
+  const titleEl = document.getElementById('title');
+  const fileInput = document.getElementById('fileInput');
+
+  const DEFAULT_COLORS = [
+    '#e63946', '#f4a261', '#e9c46a', '#2a9d8f',
+    '#457b9d', '#8ab17d', '#bc6c25', '#9b5de5',
+    '#00bbf9', '#f15bb5', '#fee440', '#43aa8b'
+  ];
+
+  let config = { title: 'Spin the Wheel', segments: [], spinDurationMs: 5000, removeAfterPick: false };
+  let segments = [];
+  let currentRotation = 0; // degrees
+  let spinning = false;
+
+  const size = canvas.width;
+  const center = size / 2;
+  const radius = center - 10;
+
+  function normalizeSegments(raw) {
+    return raw
+      .map((s, i) => {
+        if (typeof s === 'string') s = { label: s };
+        if (!s || !s.label) return null;
+        return {
+          label: String(s.label),
+          color: s.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+          weight: Number(s.weight) > 0 ? Number(s.weight) : 1
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function applyConfig(cfg) {
+    config = Object.assign({ spinDurationMs: 5000, removeAfterPick: false }, cfg);
+    config.title = cfg.title || 'Spin the Wheel';
+    segments = normalizeSegments(Array.isArray(cfg.segments) ? cfg.segments : []);
+    titleEl.textContent = config.title;
+    document.title = config.title;
+    canvas.style.setProperty('--dur', (config.spinDurationMs / 1000) + 's');
+    currentRotation = 0;
+    canvas.style.transition = 'none';
+    canvas.style.transform = 'rotate(0deg)';
+    // force reflow so the next transition works
+    void canvas.offsetWidth;
+    canvas.style.transition = '';
+    errorEl.textContent = '';
+    resultEl.innerHTML = 'Press <strong>SPIN</strong> to pick a winner';
+    draw();
+    spinBtn.disabled = segments.length < 2;
+    if (segments.length < 2) {
+      errorEl.textContent = 'Need at least 2 segments to spin.';
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, size, size);
+    const n = segments.length;
+    if (n === 0) return;
+
+    const totalWeight = segments.reduce((a, s) => a + s.weight, 0);
+    let angle = -Math.PI / 2; // start at top
+
+    segments.forEach((seg) => {
+      const slice = (seg.weight / totalWeight) * Math.PI * 2;
+      const end = angle + slice;
+
+      // wedge
+      ctx.beginPath();
+      ctx.moveTo(center, center);
+      ctx.arc(center, center, radius, angle, end);
+      ctx.closePath();
+      ctx.fillStyle = seg.color;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(15,16,32,0.6)';
+      ctx.stroke();
+
+      // label
+      ctx.save();
+      ctx.translate(center, center);
+      ctx.rotate(angle + slice / 2);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = pickTextColor(seg.color);
+      const fontSize = Math.max(20, Math.min(46, 200 / Math.max(n, 6)));
+      ctx.font = `600 ${fontSize}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+      let label = seg.label;
+      const maxChars = Math.floor(22 - n * 0.4);
+      if (label.length > maxChars && maxChars > 3) label = label.slice(0, maxChars - 1) + '…';
+      ctx.fillText(label, radius - 24, 0);
+      ctx.restore();
+
+      angle = end;
+    });
+
+    // hub
+    ctx.beginPath();
+    ctx.arc(center, center, 54, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f1020';
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.stroke();
+  }
+
+  function pickTextColor(hex) {
+    const c = hex.replace('#', '');
+    if (c.length < 6) return '#1a1c33';
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.6 ? '#1a1c33' : '#ffffff';
+  }
+
+  // Determine which segment sits under the top pointer given a rotation (deg)
+  function segmentAtPointer(rotationDeg) {
+    const totalWeight = segments.reduce((a, s) => a + s.weight, 0);
+    // Pointer is at top (-90deg). Wheel drawn starting at top and going clockwise.
+    // After rotating the wheel by rotationDeg (clockwise), the segment under the
+    // pointer is the one whose original angular position is (360 - rotation) mod 360.
+    let pointer = ((-rotationDeg) % 360 + 360) % 360;
+    let acc = 0;
+    for (const seg of segments) {
+      const slice = (seg.weight / totalWeight) * 360;
+      if (pointer >= acc && pointer < acc + slice) return seg;
+      acc += slice;
+    }
+    return segments[segments.length - 1];
+  }
+
+  function spin() {
+    if (spinning || segments.length < 2) return;
+    spinning = true;
+    spinBtn.disabled = true;
+    resultEl.classList.remove('pop');
+
+    const totalWeight = segments.reduce((a, s) => a + s.weight, 0);
+    // pick winner by weight
+    let r = Math.random() * totalWeight;
+    let winnerIndex = 0, acc = 0, startAcc = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const slice = segments[i].weight;
+      if (r < acc + slice) { winnerIndex = i; startAcc = acc; break; }
+      acc += slice;
+    }
+    const winner = segments[winnerIndex];
+    const winnerSliceDeg = (winner.weight / totalWeight) * 360;
+    const winnerStartDeg = (startAcc / totalWeight) * 360;
+    // land somewhere within the winning slice (avoid edges)
+    const landWithin = winnerStartDeg + winnerSliceDeg * (0.2 + Math.random() * 0.6);
+    // rotation needed so that landWithin sits under pointer: rotation ≡ -landWithin
+    const targetMod = ((-landWithin) % 360 + 360) % 360;
+
+    const currentMod = ((currentRotation % 360) + 360) % 360;
+    let delta = targetMod - currentMod;
+    if (delta < 0) delta += 360;
+    const fullSpins = 5 + Math.floor(Math.random() * 3);
+    currentRotation += fullSpins * 360 + delta;
+
+    canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+    const done = () => {
+      canvas.removeEventListener('transitionend', done);
+      const picked = segmentAtPointer(currentRotation);
+      resultEl.innerHTML = `Winner: <strong>${escapeHtml(picked.label)}</strong>`;
+      resultEl.classList.add('pop');
+      spinning = false;
+
+      if (config.removeAfterPick) {
+        segments = segments.filter((s) => s !== picked);
+        setTimeout(() => {
+          canvas.style.transition = 'none';
+          currentRotation = 0;
+          canvas.style.transform = 'rotate(0deg)';
+          void canvas.offsetWidth;
+          canvas.style.transition = '';
+          draw();
+          spinBtn.disabled = segments.length < 2;
+          if (segments.length < 2) errorEl.textContent = 'Only one option left — reload to reset.';
+        }, 1200);
+      } else {
+        spinBtn.disabled = false;
+      }
+    };
+    canvas.addEventListener('transitionend', done);
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function loadFromFetch() {
+    fetch('wheel.json', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(applyConfig)
+      .catch((err) => {
+        errorEl.textContent = 'Could not load wheel.json (' + err.message +
+          '). Use “Load JSON” to pick a file.';
+      });
+  }
+
+  // --- events ---
+  spinBtn.addEventListener('click', spin);
+  document.getElementById('reloadBtn').addEventListener('click', loadFromFetch);
+  document.getElementById('shuffleBtn').addEventListener('click', () => {
+    if (spinning) return;
+    for (let i = segments.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [segments[i], segments[j]] = [segments[j], segments[i]];
+    }
+    draw();
+  });
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { applyConfig(JSON.parse(reader.result)); }
+      catch (err) { errorEl.textContent = 'Invalid JSON: ' + err.message; }
+    };
+    reader.readAsText(file);
+  });
+
+  loadFromFetch();
+})();
+</script>
+</body>
+</html>

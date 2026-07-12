@@ -1,0 +1,10 @@
+{
+  "title": "Spin the Wheel",
+  "spinDurationMs": 5000,
+  "removeAfterPick": false,
+  "segments": [
+    { "label": "Yes", "color": "#457b9d" },
+    { "label": "No", "color": "#e9c46a" }
+
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "title": "Spin on what project to work on",
+  "spinDurationMs": 5000,
+  "removeAfterPick": false,
+  "segments": [
+    { "label": "AI in 5G Process", "color": "#457b9d" },
+    { "label": "Current Video Game", "color": "#e9c46a" },
+    { "label": "Quick PCB Design", "color": "#457b9d" },
+    { "label": "Current Hardware Design", "color": "#e9c46a" },
+    { "label": "Quick Openlane Project", "color": "#457b9d" },
+    { "label": "Quick Raspberry Pi Project", "color": "#e9c46a" },
+    { "label": "Pick a project from wishlist", "color": "#457b9d" },
+    { "label": "Current Verification Project", "color": "#e9c46a" }
+  ]
+}
